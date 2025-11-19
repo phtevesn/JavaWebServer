@@ -164,6 +164,9 @@ public class lts {
     //
     private void handleConnection(Socket socket) throws IOException {
         // TODO: Implement dispatch logic
+        if (keepAlive) handleBasic(socket);
+        else handleWithKeepAlive(socket);
+
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -191,6 +194,23 @@ public class lts {
     //
     private void handleBasic(Socket socket) throws IOException {
         // TODO: Implement basic request handling
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        OutputStream out = new OutputStream(socket.getOutputStream());
+
+        String requestLine = in.readLine();
+        Map<String, String> headers = parseHeaders(in);
+        String[] request = validateRequest(requestLine);
+        String method = request[0];
+        String path = request[1];
+
+        if (headers.isEmpty() || request == null){
+            //sendError 400
+        } else if (!request[0].equalsIgnoreCase("get")){
+            //sendError 405
+        } 
+        shouldKeepAlive = false;
+        dispatchRequest(out, path, keepAlive);
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -335,6 +355,9 @@ public class lts {
     //
     private void dispatchRequest(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement routing logic
+        if (path.startsWith("/echo/")) handleEcho(out, path, shouldKeepAlive);
+        else handleStaticFile(out, path, shouldKeepAlive);
+
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -407,6 +430,39 @@ public class lts {
     //
     private void handleStaticFile(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement static file serving with security checks
+        long threshold = 1L * 1024 * 1024; // 1 MB as long
+        if(path.contains("..")){
+            //security breach
+            //send err 403
+            return;
+        }
+        if(path.equals("/"))path = "/index.html";
+        Path filePath = Paths.get("public", path);
+        if (Files.exists(filePath) && Files.isRegularFile(filePath)){
+            String contentType = guessContentType(path);
+            byte[] content = Files.readAllBytes(filePath);
+            sendResponse(out, 200, "OK", contentType, content, null, shouldKeepAlive);
+
+            /*
+            //read content
+            if (Files.size(filePath) > threshold){
+                //large file streaming
+                
+            } else {
+                byte[] content = Files.readAllBytes(filePath);
+            }
+            */
+
+            //send res
+        } else {
+            if (!tryServeCustom404(out, shouldKeepAlive)){
+                //senderr 404
+            }
+        }
+        
+
+
+        
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -476,6 +532,24 @@ public class lts {
                              byte[] body, Map<String, String> extraHeaders, boolean shouldKeepAlive)
                              throws IOException {
         // TODO: Implement HTTP response formatting
+        String connection = shouldKeepAlive ? "keep-alive" : "close";
+        PrintWriter writer = new PrintWriter(out, false);
+        writer.print("HTTP/1.1 " + code + " " + message + "\r\n");
+        writer.print("Content-Type: " + contentType + "\r\n");
+        writer.print("Content-Length: " + body.length + "\r\n");
+        if (extraHeaders != null) {
+            for (String headerName : extraHeaders.keySet()){
+                writer.print(headerName + ": " + extraHeaders.get(headerName) + "\r\n");
+            }
+        }
+        writer.print("Connection: " + connection + "\r\n");
+        writer.print("\r\n");
+        writer.flush();
+                                
+        out.write(body);
+        out.flush();
+
+        //Date, Server, Content Length, Connection
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
