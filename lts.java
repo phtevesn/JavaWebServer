@@ -164,7 +164,7 @@ public class lts {
     //
     private void handleConnection(Socket socket) throws IOException {
         // TODO: Implement dispatch logic
-        if (keepAlive) handleBasic(socket);
+        if (!keepAlive) handleBasic(socket);
         else handleWithKeepAlive(socket);
 
     }
@@ -196,21 +196,22 @@ public class lts {
         // TODO: Implement basic request handling
 
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        OutputStream out = new OutputStream(socket.getOutputStream());
+        OutputStream out = socket.getOutputStream();
 
         String requestLine = in.readLine();
         Map<String, String> headers = parseHeaders(in);
         String[] request = validateRequest(requestLine);
         String method = request[0];
         String path = request[1];
+        keepAlive = false;
 
         if (headers.isEmpty() || request == null){
-            //sendError 400
-        } else if (!request[0].equalsIgnoreCase("get")){
-            //sendError 405
-        } 
-        shouldKeepAlive = false;
-        dispatchRequest(out, path, keepAlive);
+            sendError(out, 400, "Bad Request", keepAlive);
+        } else if (!method.equalsIgnoreCase("get")){
+            sendError(out, 405, "Method Not Allowed", keepAlive);
+        } else {
+            dispatchRequest(out, path, keepAlive);
+        }
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -395,6 +396,7 @@ public class lts {
     //
     private void handleEcho(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement echo endpoint with hash generation
+        System.out.println("Hello");
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -432,8 +434,7 @@ public class lts {
         // TODO: Implement static file serving with security checks
         long threshold = 1L * 1024 * 1024; // 1 MB as long
         if(path.contains("..")){
-            //security breach
-            //send err 403
+            sendError(out, 403, "Forbidden", shouldKeepAlive);
             return;
         }
         if(path.equals("/"))path = "/index.html";
@@ -456,13 +457,10 @@ public class lts {
             //send res
         } else {
             if (!tryServeCustom404(out, shouldKeepAlive)){
-                //senderr 404
+                //if it can't send the custom 404 page send 404 error
+                sendError(out, 404, "Not Found", shouldKeepAlive);
             }
         }
-        
-
-
-        
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -574,6 +572,21 @@ public class lts {
     private void sendError(OutputStream out, int code, String message, boolean shouldKeepAlive)
                           throws IOException {
         // TODO: Implement error response wrapper
+        String htmlBody = "<html><body><h1> " + code + " " + message + " </h1></body></html>";
+        String contentType = "text/html";
+        byte[] body = htmlBody.getBytes();
+        String connection = shouldKeepAlive ? "keep-alive" : "close";
+        PrintWriter writer = new PrintWriter(out, false);
+
+        writer.print("HTTP/1.1 " + code + " " + message + "\r\n");
+        writer.print("Content-Type: " + contentType + "\r\n");
+        writer.print("Content-Length: " + body.length + "\r\n");
+        writer.print("Connection: " + connection + "\r\n");
+        writer.print("\r\n");
+        writer.flush();
+                                
+        out.write(body);
+        out.flush();
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
