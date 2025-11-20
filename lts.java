@@ -432,9 +432,12 @@ public class lts {
     //
     private void handleStaticFile(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement static file serving with security checks
-        long threshold = 1L * 1024 * 1024; // 1 MB as long
+        long startTime = System.nanoTime();
+        long threshold = 1L * 1024 * 1024; // 1 MB as long 
+        int code = 200;
         if(path.contains("..")){
-            sendError(out, 403, "Forbidden", shouldKeepAlive);
+            code = 403;
+            sendError(out, code, "Forbidden", shouldKeepAlive);
             return;
         }
         if(path.equals("/"))path = "/index.html";
@@ -442,18 +445,20 @@ public class lts {
         if (Files.exists(filePath) && Files.isRegularFile(filePath)){
             String contentType = guessContentType(path);
             byte[] content = Files.readAllBytes(filePath);
-            sendResponse(out, 200, "OK", contentType, content, null, shouldKeepAlive);
+            sendResponse(out, code, "OK", contentType, content, null, shouldKeepAlive);
+            long latency = (System.nanoTime() - startTime) / 1_000_000;
+            if(!quiet)
+                System.out.println("GET " + filePath + " " + code + " " + content.length + "B " + latency + "ms");
 
             /*
             //read content
             if (Files.size(filePath) > threshold){
                 //large file streaming
-                
+                //requires a separate sendResponse function for streaming
             } else {
                 byte[] content = Files.readAllBytes(filePath);
             }
             */
-
             //send res
         } else {
             if (!tryServeCustom404(out, shouldKeepAlive)){
@@ -546,7 +551,6 @@ public class lts {
                                 
         out.write(body);
         out.flush();
-
         //Date, Server, Content Length, Connection
     }
 
