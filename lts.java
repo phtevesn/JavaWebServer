@@ -194,7 +194,6 @@ public class lts {
     //
     private void handleBasic(Socket socket) throws IOException {
         // TODO: Implement basic request handling
-
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         OutputStream out = socket.getOutputStream();
 
@@ -205,10 +204,15 @@ public class lts {
         String path = request[1];
         keepAlive = false;
 
+        int code;
         if (headers.isEmpty() || request == null){
-            sendError(out, 400, "Bad Request", keepAlive);
+            code = 400;
+            sendError(out, code, "Bad Request", keepAlive);
+
         } else if (!method.equalsIgnoreCase("get")){
-            sendError(out, 405, "Method Not Allowed", keepAlive);
+            code = 405;
+            sendError(out, code, "Method Not Allowed", keepAlive);
+
         } else {
             dispatchRequest(out, path, keepAlive);
         }
@@ -247,6 +251,39 @@ public class lts {
     //
     private void handleWithKeepAlive(Socket socket) throws IOException {
         // TODO: Implement keep-alive request handling with loop
+        socket.setSoTimeout(keepAliveTimeout * 1000);
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        OutputStream out = socket.getOutputStream();
+        while(true) {
+            try {
+                String requestLine = in.readLine();
+                if (requestLine == null || requestLine.equals("")) break;
+
+                Map<String, String> headers = parseHeaders(in);
+                String[] request = validateRequest(requestLine);
+                String method = request[0];
+                String path = request[1];
+
+                if (headers.get("connection").equals("close")){
+                    keepAlive = false;
+                }
+
+                int code;
+                if (headers.isEmpty() || request == null){
+                    code = 400;
+                    sendError(out, code, "Bad Request", keepAlive);
+                } else if (!method.equalsIgnoreCase("get")){
+                    code = 405;
+                    sendError(out, code, "Method Not Allowed", keepAlive);
+                } else {
+                    dispatchRequest(out, path, keepAlive);
+                }
+                if (!keepAlive) break;
+            } catch (SocketTimeoutException e){
+
+                break;
+            }
+        }
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -449,7 +486,6 @@ public class lts {
             long latency = (System.nanoTime() - startTime) / 1_000_000;
             if(!quiet)
                 System.out.println("GET " + filePath + " " + code + " " + content.length + "B " + latency + "ms");
-
             /*
             //read content
             if (Files.size(filePath) > threshold){
@@ -591,6 +627,7 @@ public class lts {
                                 
         out.write(body);
         out.flush();
+
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
