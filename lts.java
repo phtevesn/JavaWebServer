@@ -206,19 +206,19 @@ public class lts {
         String[] request = validateRequest(requestLine);
         String method = request[0];
         String path = request[1];
-        keepAlive = false;
+        boolean shouldKeepAlive = false;
 
         int code;
         if (headers.isEmpty() || request == null){
             code = 400;
-            sendError(out, code, "Bad Request", keepAlive);
+            sendError(out, code, "Bad Request", shouldKeepAlive);
 
         } else if (!method.equalsIgnoreCase("get")){
             code = 405;
-            sendError(out, code, "Method Not Allowed", keepAlive);
+            sendError(out, code, "Method Not Allowed", shouldKeepAlive);
 
         } else {
-            dispatchRequest(out, path, keepAlive);
+            dispatchRequest(out, path, shouldKeepAlive);
         }
     }
 
@@ -272,21 +272,21 @@ public class lts {
                 String[] request = validateRequest(requestLine);
                 String method = request[0];
                 String path = request[1];
-                if (headers.get("connection").equalsIgnoreCase("close")){
-                    keepAlive = false;
-                }
+                String c = headers.getOrDefault("connection", ""); 
+                boolean clientClose = c.equalsIgnoreCase("close");
+                boolean shouldKeepAlive = !clientClose;
 
                 int code;
                 if (headers.isEmpty() || request == null){
                     code = 400;
-                    sendError(out, code, "Bad Request", keepAlive);
+                    sendError(out, code, "Bad Request", shouldKeepAlive);
                 } else if (!method.equalsIgnoreCase("get")){
                     code = 405;
-                    sendError(out, code, "Method Not Allowed", keepAlive);
+                    sendError(out, code, "Method Not Allowed", shouldKeepAlive);
                 } else {
-                    dispatchRequest(out, path, keepAlive);
+                    dispatchRequest(out, path, shouldKeepAlive);
                 }
-                if (!keepAlive) break;
+                if (!shouldKeepAlive) break;
             } catch (SocketTimeoutException e){
                 break;
             }
@@ -329,6 +329,19 @@ public class lts {
     //
     private void handleConnectionThreaded(Socket socket) {
         // TODO: Implement virtual thread connection handling
+        Thread virtualThread = Thread.ofVirtual().start(() -> {
+            try {
+                handleConnection(socket);
+            } catch (IOException e) {
+                System.err.println("Error accepting connection: " + e.getMessage());
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    System.err.println("Failed to close client socket error message: " + e.getMessage());
+                }
+            }
+        });
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
