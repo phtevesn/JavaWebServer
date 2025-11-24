@@ -257,14 +257,17 @@ public class lts {
         while(true) {
             try {
                 String requestLine = in.readLine();
-                if (requestLine == null || requestLine.equals("")) break;
-
+                if (requestLine == null) break;
+                if (requestLine.isEmpty()) {
+                    sendError(out, 400, "Bad Request", false);
+                    break;
+                }
                 Map<String, String> headers = parseHeaders(in);
                 String[] request = validateRequest(requestLine);
                 String method = request[0];
                 String path = request[1];
 
-                if (headers.get("connection").equals("close")){
+                if (headers.get("connection").equalsIgnoreCase("close")){
                     keepAlive = false;
                 }
 
@@ -477,6 +480,8 @@ public class lts {
             sendError(out, code, "Forbidden", shouldKeepAlive);
             return;
         }
+
+
         if(path.equals("/"))path = "/index.html";
         Path filePath = Paths.get("public", path);
         if (Files.exists(filePath) && Files.isRegularFile(filePath)){
@@ -581,7 +586,10 @@ public class lts {
                 writer.print(headerName + ": " + extraHeaders.get(headerName) + "\r\n");
             }
         }
+        //if connection include Keep-Alive header
+        
         writer.print("Connection: " + connection + "\r\n");
+        if (shouldKeepAlive) writer.print("Keep-Alive: timeout="+keepAliveTimeout+"\r\n");
         writer.print("\r\n");
         writer.flush();
                                 
