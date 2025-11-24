@@ -106,7 +106,7 @@ public class lts {
             while (true) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-
+                    
                     if (threaded) {
                         // Phase 3: Handle connection in virtual thread
                         handleConnectionThreaded(clientSocket);
@@ -198,6 +198,10 @@ public class lts {
         OutputStream out = socket.getOutputStream();
 
         String requestLine = in.readLine();
+        if (requestLine == null || requestLine.isEmpty()) {
+            sendError(out, 400, "Bad Request", false);
+            return;
+        }
         Map<String, String> headers = parseHeaders(in);
         String[] request = validateRequest(requestLine);
         String method = request[0];
@@ -257,16 +261,17 @@ public class lts {
         while(true) {
             try {
                 String requestLine = in.readLine();
+                
                 if (requestLine == null) break;
                 if (requestLine.isEmpty()) {
                     sendError(out, 400, "Bad Request", false);
                     break;
                 }
+                
                 Map<String, String> headers = parseHeaders(in);
                 String[] request = validateRequest(requestLine);
                 String method = request[0];
                 String path = request[1];
-
                 if (headers.get("connection").equalsIgnoreCase("close")){
                     keepAlive = false;
                 }
@@ -283,7 +288,6 @@ public class lts {
                 }
                 if (!keepAlive) break;
             } catch (SocketTimeoutException e){
-
                 break;
             }
         }
@@ -398,7 +402,6 @@ public class lts {
         // TODO: Implement routing logic
         if (path.startsWith("/echo/")) handleEcho(out, path, shouldKeepAlive);
         else handleStaticFile(out, path, shouldKeepAlive);
-
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
