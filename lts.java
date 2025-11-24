@@ -452,7 +452,7 @@ public class lts {
     //
     private void handleEcho(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement echo endpoint with hash generation
-        System.out.println("Hello");
+        
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
