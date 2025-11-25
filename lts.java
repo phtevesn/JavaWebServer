@@ -3,6 +3,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.file.*;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 //============================================================================
@@ -452,7 +453,46 @@ public class lts {
     //
     private void handleEcho(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement echo endpoint with hash generation
-        
+        if(!quiet) System.out.println("Request: GET " + path);
+        int code;
+        long startTime = System.nanoTime();
+        String[] pathSplit = path.split("/");
+        if(pathSplit.length < 3) sendError(out, 400, "Bad Request", shouldKeepAlive);
+        else {
+            int size;
+            try {
+                size = Integer.parseInt(pathSplit[2]);
+            } catch (NumberFormatException e) {
+                code = 400;
+                sendError(out, code, "Bad Request", shouldKeepAlive);
+                if(!quiet) System.out.println("GET " + path + " " + code);
+                return;
+            }
+            if (size < 0) {
+                code = 400;
+                sendError(out, code, "Bad Request", shouldKeepAlive);
+                if(!quiet) System.out.println("GET " + path + " " + code);
+                return;
+            }
+            byte[] payload = generatePayload(size);
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                code = 500;
+                sendError(out, code, "Internal Server Error", shouldKeepAlive);
+                if(!quiet) System.out.println("GET " + path + " " + code);
+                return;
+            }
+            byte[] hashPayload = digest.digest(payload);
+            String stringPayload = bytesToHex(hashPayload);
+            HashMap<String, String> extraHeaders = new HashMap<>();
+            extraHeaders.put("X-Payload-Hash", stringPayload);
+            code = 200;
+            sendResponse(out, code, "OK", "text/plain", payload, extraHeaders, shouldKeepAlive);
+            long latency = System.nanoTime()-startTime;
+            if(!quiet) System.out.println("GET " + path + " " + code + " " + payload.length + "B " + latency + "ms");
+        }
     }
 
     //''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -488,6 +528,7 @@ public class lts {
     //
     private void handleStaticFile(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement static file serving with security checks
+        System.out.println("Request: GET " + path);
         long startTime = System.nanoTime();
         long threshold = 1L * 1024 * 1024; // 1 MB as long 
         int code = 200;
@@ -521,6 +562,7 @@ public class lts {
             if (!tryServeCustom404(out, shouldKeepAlive)){
                 //if it can't send the custom 404 page send 404 error
                 sendError(out, 404, "Not Found", shouldKeepAlive);
+                if(!quiet) System.out.println("GET " + path + " " + code);
             }
         }
     }
