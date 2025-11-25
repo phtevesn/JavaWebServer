@@ -490,7 +490,7 @@ public class lts {
             extraHeaders.put("X-Payload-Hash", stringPayload);
             code = 200;
             sendResponse(out, code, "OK", "text/plain", payload, extraHeaders, shouldKeepAlive);
-            long latency = System.nanoTime()-startTime;
+            long latency = (System.nanoTime()-startTime) / 1_000_000;
             if(!quiet) System.out.println("GET " + path + " " + code + " " + payload.length + "B " + latency + "ms");
         }
     }
