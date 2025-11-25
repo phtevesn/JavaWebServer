@@ -499,7 +499,7 @@ public class lts {
 
 
         if(path.equals("/"))path = "/index.html";
-        Path filePath = Paths.get("public", path);
+        Path filePath = Paths.get(PUBLIC_DIR, path);
         if (Files.exists(filePath) && Files.isRegularFile(filePath)){
             String contentType = guessContentType(path);
             byte[] content = Files.readAllBytes(filePath);
@@ -547,6 +547,13 @@ public class lts {
     //
     private boolean tryServeCustom404(OutputStream out, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement custom 404 page serving
+        long startTime = System.nanoTime();
+        Path path404 = Paths.get(PUBLIC_DIR, "404.html");
+        if (Files.exists(path404) && Files.isRegularFile(path404)){
+            byte[] content = Files.readAllBytes(path404);
+            sendResponse(out, 404, "Not Found", "text/html", content, null, shouldKeepAlive);
+            return true; 
+        }
         return false; // Placeholder - replace with actual implementation
     }
 
