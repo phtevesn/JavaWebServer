@@ -197,6 +197,8 @@ public class lts {
         // TODO: Implement basic request handling
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         OutputStream out = socket.getOutputStream();
+        int code;
+        boolean shouldKeepAlive = false;
 
         String requestLine = in.readLine();
         if (requestLine == null || requestLine.isEmpty()) {
@@ -205,19 +207,21 @@ public class lts {
         }
         Map<String, String> headers = parseHeaders(in);
         String[] request = validateRequest(requestLine);
-        String method = request[0];
-        String path = request[1];
-        boolean shouldKeepAlive = false;
-
-        int code;
         if (headers.isEmpty() || request == null){
             code = 400;
             sendError(out, code, "Bad Request", shouldKeepAlive);
+            return;
+        }
 
+        String method = request[0];
+        String path = request[1];
+        
+        if (headers.isEmpty() || request == null){
+            code = 400;
+            sendError(out, code, "Bad Request", shouldKeepAlive);
         } else if (!method.equalsIgnoreCase("get")){
             code = 405;
             sendError(out, code, "Method Not Allowed", shouldKeepAlive);
-
         } else {
             dispatchRequest(out, path, shouldKeepAlive);
         }
@@ -259,29 +263,32 @@ public class lts {
         socket.setSoTimeout(keepAliveTimeout * 1000);
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         OutputStream out = socket.getOutputStream();
+        int code;
+        boolean shouldKeepAlive = false;
         while(true) {
             try {
                 String requestLine = in.readLine();
-                
                 if (requestLine == null) break;
                 if (requestLine.isEmpty()) {
-                    sendError(out, 400, "Bad Request", false);
+                    sendError(out, 400, "Bad Request", shouldKeepAlive);
                     break;
                 }
                 
                 Map<String, String> headers = parseHeaders(in);
                 String[] request = validateRequest(requestLine);
+                if (headers.isEmpty() || request == null){
+                    code = 400;
+                    sendError(out, code, "Bad Request", shouldKeepAlive);
+                    return;
+                }
+
                 String method = request[0];
                 String path = request[1];
                 String c = headers.getOrDefault("connection", ""); 
                 boolean clientClose = c.equalsIgnoreCase("close");
-                boolean shouldKeepAlive = !clientClose;
+                shouldKeepAlive = !clientClose;
 
-                int code;
-                if (headers.isEmpty() || request == null){
-                    code = 400;
-                    sendError(out, code, "Bad Request", shouldKeepAlive);
-                } else if (!method.equalsIgnoreCase("get")){
+                if (!method.equalsIgnoreCase("get")){
                     code = 405;
                     sendError(out, code, "Method Not Allowed", shouldKeepAlive);
                 } else {
@@ -289,6 +296,7 @@ public class lts {
                 }
                 if (!shouldKeepAlive) break;
             } catch (SocketTimeoutException e){
+
                 break;
             }
         }
@@ -372,7 +380,6 @@ public class lts {
                 headers.put(headerName, headerValue);
             }
         }
-
         return headers;
     }
 
@@ -462,6 +469,12 @@ public class lts {
             int size;
             try {
                 size = Integer.parseInt(pathSplit[2]);
+                if (size > 100000000){
+                    code = 400;
+                    sendError(out, code, "Bad Request", shouldKeepAlive);
+                    if(!quiet) System.out.println("GET " + path + " " + code);
+                    return;
+                }
             } catch (NumberFormatException e) {
                 code = 400;
                 sendError(out, code, "Bad Request", shouldKeepAlive);
@@ -528,18 +541,15 @@ public class lts {
     //
     private void handleStaticFile(OutputStream out, String path, boolean shouldKeepAlive) throws IOException {
         // TODO: Implement static file serving with security checks
-        System.out.println("Request: GET " + path);
         long startTime = System.nanoTime();
-        long threshold = 1L * 1024 * 1024; // 1 MB as long 
         int code = 200;
         if(path.contains("..")){
             code = 403;
             sendError(out, code, "Forbidden", shouldKeepAlive);
             return;
         }
-
-
         if(path.equals("/"))path = "/index.html";
+        if(!quiet) System.out.println("Request: GET " + path);
         Path filePath = Paths.get(PUBLIC_DIR, path);
         if (Files.exists(filePath) && Files.isRegularFile(filePath)){
             String contentType = guessContentType(path);
@@ -548,19 +558,8 @@ public class lts {
             long latency = (System.nanoTime() - startTime) / 1_000_000;
             if(!quiet)
                 System.out.println("GET " + filePath + " " + code + " " + content.length + "B " + latency + "ms");
-            /*
-            //read content
-            if (Files.size(filePath) > threshold){
-                //large file streaming
-                //requires a separate sendResponse function for streaming
-            } else {
-                byte[] content = Files.readAllBytes(filePath);
-            }
-            */
-            //send res
         } else {
             if (!tryServeCustom404(out, shouldKeepAlive)){
-                //if it can't send the custom 404 page send 404 error
                 sendError(out, 404, "Not Found", shouldKeepAlive);
                 if(!quiet) System.out.println("GET " + path + " " + code);
             }
@@ -594,9 +593,12 @@ public class lts {
         if (Files.exists(path404) && Files.isRegularFile(path404)){
             byte[] content = Files.readAllBytes(path404);
             sendResponse(out, 404, "Not Found", "text/html", content, null, shouldKeepAlive);
+            long latency = (System.nanoTime() - startTime) / 1_000_000;
+            System.out.println("GET " +  path404 + " " + latency + "ms");
+            if (!quiet)
             return true; 
         }
-        return false; // Placeholder - replace with actual implementation
+        return false;
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
