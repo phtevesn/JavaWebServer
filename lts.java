@@ -594,8 +594,7 @@ public class lts {
             byte[] content = Files.readAllBytes(path404);
             sendResponse(out, 404, "Not Found", "text/html", content, null, shouldKeepAlive);
             long latency = (System.nanoTime() - startTime) / 1_000_000;
-            System.out.println("GET " +  path404 + " " + latency + "ms");
-            if (!quiet)
+            if (!quiet) System.out.println("GET " +  path404 + " " + "404" +  " " + content.length + "B " + latency + "ms");
             return true; 
         }
         return false;
